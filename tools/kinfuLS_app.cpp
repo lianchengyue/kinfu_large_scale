@@ -66,7 +66,11 @@ Work in progress: patch by Marco (AUG,19th 2012)
 #include <pcl/io/pcd_io.h>
 #include <pcl/io/ply_io.h>
 #include <pcl/io/vtk_io.h>
-#include <pcl/io/openni_grabber.h>
+
+//#include <pcl/io/openni_grabber.h>
+// 使用openni2
+#include <pcl/io/openni2_grabber.h>
+
 #include <pcl/io/oni_grabber.h>
 #include <pcl/io/pcd_grabber.h>
 
@@ -694,7 +698,9 @@ struct KinFuLSApp
 {
   enum { PCD_BIN = 1, PCD_ASCII = 2, PLY = 3, MESH_PLY = 7, MESH_VTK = 8 };
 
-  KinFuLSApp(pcl::Grabber& source, float vsz, float shiftDistance, int snapshotRate) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), independent_camera_ (false),
+  //KinFuLSApp(pcl::Grabber& source
+  // 使用openni2
+  KinFuLSApp(pcl::io::OpenNI2Grabber& source, float vsz, float shiftDistance, int snapshotRate) : exit_ (false), scan_ (false), scan_mesh_(false), scan_volume_ (false), independent_camera_ (false),
           registration_ (false), integrate_colors_ (false), pcd_source_ (false), focal_length_(-1.f), capture_ (source), was_lost_(false), time_ms_ (0)
   {    
     //Init Kinfu Tracker
@@ -767,7 +773,8 @@ struct KinFuLSApp
   void
   initRegistration ()
   {        
-    registration_ = capture_.providesCallback<pcl::ONIGrabber::sig_cb_openni_image_depth_image> ();
+    //registration_ = capture_.providesCallback<pcl::ONIGrabber::sig_cb_openni_image_depth_image> ();  //flq
+    registration_ = capture_.providesCallback<pcl::io::OpenNI2Grabber::sig_cb_openni_image_depth_image> ();
     cout << "Registration mode: " << (registration_ ? "On" : "Off (not supported by source)") << endl;
   }
 
@@ -891,7 +898,10 @@ struct KinFuLSApp
     
   }
 
-  void source_cb1(const boost::shared_ptr<openni_wrapper::DepthImage>& depth_wrapper)  
+
+  //void source_cb1(const boost::shared_ptr<openni_wrapper::DepthImage>& depth_wrapper)  
+  // 使用openni2
+  void source_cb1(const boost::shared_ptr<pcl::io::OpenNI2Grabber::DepthImage>& depth_wrapper) 
   {        
     {
       boost::mutex::scoped_try_lock lock(data_ready_mutex_);
@@ -909,7 +919,9 @@ struct KinFuLSApp
     data_ready_cond_.notify_one();
   }
 
-  void source_cb2(const boost::shared_ptr<openni_wrapper::Image>& image_wrapper, const boost::shared_ptr<openni_wrapper::DepthImage>& depth_wrapper, float)
+  //void source_cb2(const boost::shared_ptr<openni_wrapper::Image>& image_wrapper, const boost::shared_ptr<openni_wrapper::DepthImage>& depth_wrapper, float)
+  // 使用openni2
+  void source_cb2(const boost::shared_ptr<pcl::io::OpenNI2Grabber::Image>& image_wrapper, const boost::shared_ptr<pcl::io::OpenNI2Grabber::DepthImage>& depth_wrapper, float)
   {
     {
       boost::mutex::scoped_try_lock lock(data_ready_mutex_);
@@ -981,9 +993,12 @@ struct KinFuLSApp
   void
   startMainLoop (bool triggered_capture)
   {   
-    using namespace openni_wrapper;
-    typedef boost::shared_ptr<DepthImage> DepthImagePtr;
-    typedef boost::shared_ptr<Image>      ImagePtr;
+    //using namespace openni_wrapper;
+    //typedef boost::shared_ptr<DepthImage> DepthImagePtr;
+    //typedef boost::shared_ptr<Image>      ImagePtr;
+	// 使用openni2
+	typedef boost::shared_ptr<pcl::io::OpenNI2Grabber::DepthImage> DepthImagePtr;
+	typedef boost::shared_ptr<pcl::io::OpenNI2Grabber::Image> ImagePtr;
 
     boost::function<void (const ImagePtr&, const DepthImagePtr&, float constant)> func1 = boost::bind (&KinFuLSApp::source_cb2, this, _1, _2, _3);
     boost::function<void (const DepthImagePtr&)> func2 = boost::bind (&KinFuLSApp::source_cb1, this, _1);
@@ -1100,7 +1115,10 @@ struct KinFuLSApp
   bool pcd_source_;
   float focal_length_;
 
-  pcl::Grabber& capture_;
+  //pcl::Grabber& capture_;
+  // 使用openni2
+  pcl::io::OpenNI2Grabber& capture_;
+
   KinfuTracker *kinfu_;
 
   SceneCloudView scene_cloud_view_;
@@ -1260,7 +1278,13 @@ main (int argc, char* argv[])
   //  if (checkIfPreFermiGPU(device))
   //    return cout << endl << "Kinfu is supported only for Fermi and Kepler arhitectures. It is not even compiled for pre-Fermi by default. Exiting..." << endl, 1;
 
-  boost::shared_ptr<pcl::Grabber> capture;
+  //boost::shared_ptr<pcl::Grabber> capture;
+  // 使用openni2
+  string device_id="";
+  pcl::io::OpenNI2Grabber::Mode depth_mode =pcl::io::OpenNI2Grabber::OpenNI_Default_Mode;
+  pcl::io::OpenNI2Grabber::Mode image_mode =pcl::io::OpenNI2Grabber::OpenNI_Default_Mode;//OpenNI_VGA_30Hz
+  boost::shared_ptr<pcl::io::OpenNI2Grabber> capture(new pcl::io::OpenNI2Grabber(device_id, depth_mode,image_mode));
+
   bool triggered_capture = false;
   bool pcd_input = false;
 
@@ -1269,13 +1293,16 @@ main (int argc, char* argv[])
   {    
     if (pc::parse_argument (argc, argv, "-dev", openni_device) > 0)
     {
-      capture.reset (new pcl::OpenNIGrabber (openni_device));
+		//capture.reset (new pcl::OpenNIGrabber (openni_device));
+		// 使用openni2
+		//capture.reset (new pcl::io::OpenNI2Grabber(openni_device, depth_mode, image_mode));
     }
     else if (pc::parse_argument (argc, argv, "-oni", oni_file) > 0)
     {
       triggered_capture = true;
       bool repeat = false; // Only run ONI file once
-      capture.reset (new pcl::ONIGrabber (oni_file, repeat, !triggered_capture));
+      //capture.reset (new pcl::ONIGrabber (oni_file, repeat, !triggered_capture));
+	  // 使用openni2
     }
     else if (pc::parse_argument (argc, argv, "-pcd", pcd_dir) > 0)
     {
@@ -1285,7 +1312,8 @@ main (int argc, char* argv[])
       vector<string> pcd_files = getPcdFilesInDir(pcd_dir);    
       // Sort the read files by name
       sort (pcd_files.begin (), pcd_files.end ());
-      capture.reset (new pcl::PCDGrabber<pcl::PointXYZRGBA> (pcd_files, fps_pcd, false));
+      //capture.reset (new pcl::PCDGrabber<pcl::PointXYZRGBA> (pcd_files, fps_pcd, false));
+	  // 使用openni2
       triggered_capture = true;
       pcd_input = true;
     }
@@ -1296,7 +1324,9 @@ main (int argc, char* argv[])
     }
     else
     {
-      capture.reset( new pcl::OpenNIGrabber() );
+      //capture.reset( new pcl::OpenNIGrabber() );
+	  // 使用openni2
+	  //capture.reset(new pcl::io::OpenNI2Grabber());
 
       //capture.reset( new pcl::ONIGrabber("d:/onis/20111013-224932.oni", true, true) );
       //capture.reset( new pcl::ONIGrabber("d:/onis/reg20111229-180846.oni, true, true) );    
